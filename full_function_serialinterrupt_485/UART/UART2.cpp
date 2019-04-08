@@ -48,28 +48,33 @@ void UART_CH2_SERIAL_INIT()
 void UART_CH2_send(char transmitword[], unsigned int limit)
 {
     UART_CH2_TxRequest = true;
-    int i;
-    char temp_char;
-    bool empty;
-    i = 0;
-
-
-
-    empty = (UART_CH2_tx_in == UART_CH2_tx_out);
+    int i = 0;
     while ((i==0) || (i < limit-1)) 
     {
         UART_CH2_tx_buffer[UART_CH2_tx_in] = transmitword[i];
         i++;
         UART_CH2_tx_in = (UART_CH2_tx_in + 1) % UART_CH2_buffer_size;
     }
+    if(!RTS && CTS) 
+    {
+        UART_CH2.putc(UART_CH2_RTS); RTS = true; CTS = false;
+    }
+    return;
+    
+}
 
+void UART_CH2_startSend()
+{   
+    bool empty;
+    char temp_char;
+    empty = (UART_CH2_tx_in == UART_CH2_tx_out);
+    
     if (UART_CH2.writeable() && (empty)) 
     {
         temp_char = UART_CH2_tx_buffer[UART_CH2_tx_out];
         UART_CH2_tx_out = (UART_CH2_tx_out + 1) % UART_CH2_buffer_size;
         UART_CH2.putc(temp_char);
         UART_CH2.attach(&UART_CH2_Tx_interrupt, Serial::TxIrq);
-        
     }
     return;
 }
@@ -94,7 +99,11 @@ void UART_CH2_Tx_interrupt() {
         UART_CH2_tx_out = (UART_CH2_tx_out + 1) % UART_CH2_buffer_size;
     }
     if(UART_CH2_tx_in == UART_CH2_tx_out)
+    {
         UART_CH2.attach(NULL,Serial::TxIrq);
+        RTS = false;
+        CTS = false;
+    }
     return;
 }
 
@@ -102,8 +111,13 @@ void UART_CH2_Rx_interrupt() {
     while(UART_CH2.readable())
     {
         UART_CH2_rx_buffer[UART_CH2_rx_in] = UART_CH2.getc();
-        
-
+        if( (RTS) && (!CTS) && (UART_CH2_rx_buffer[UART_CH2_rx_in] == UART_CH2_CTS) )
+        {
+                CTS = true;
+                UART_CH2_rx_in = 0;
+                UART_CH2_startSend();
+                return;
+        }
 
         if(UART_CH2_rx_buffer[UART_CH2_rx_in] == UART_CH2_ENDsign[sizeof(UART_CH2_ENDsign)-2])
             if(UART_CH2_rx_buffer[UART_CH2_rx_in-1] == UART_CH2_ENDsign[sizeof(UART_CH2_ENDsign)-3])
