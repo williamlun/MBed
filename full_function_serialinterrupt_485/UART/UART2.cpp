@@ -44,11 +44,12 @@ void UART_CH2_SERIAL_INIT()
     UART_CH2.attach(&UART_CH2_Rx_interrupt, Serial::RxIrq);
     UART_CH2_rx_StringCommand[0] = 'i';
     UART_CH2_rx_CommandLength = 1;
-    UART_CH2_send("UART_CH2_SERIAL_INIT",sizeof("UART_CH2_SERIAL_INIT"));
+    //UART_CH2_send("UART_CH2_SERIAL_INIT",sizeof("UART_CH2_SERIAL_INIT"));
 }
 void UART_CH2_waitCTS_toRTS()
 {
-    if(UART_CH2_TxRequest && UART_CH2_CTS)
+    led = !led;
+    if(UART_CH2_CTS)
     {
         waitCTStoRTS.detach();
         UART_CH2.putc(UART_CH2_RTSmessage);
@@ -58,6 +59,7 @@ void UART_CH2_waitCTS_toRTS()
 }
 void UART_CH2_waitCTS_toData()
 {
+    
     if(UART_CH2_RTS && UART_CH2_CTS)
     {
         waitCTStoDATA.detach();
@@ -67,6 +69,7 @@ void UART_CH2_waitCTS_toData()
     {
         UART_CH2.putc(UART_CH2_RTSmessage);
     }
+    
 }
 void UART_CH2_backoff()
 {
@@ -79,12 +82,32 @@ void UART_CH2_backoff()
 void UART_CH2_send(char transmitword[], unsigned int limit)
 {
     int i = 0;
+    led = 0;
     while ((i==0) || (i < limit-1)) 
     {
         UART_CH2_tx_buffer[UART_CH2_tx_in] = transmitword[i];
         i++;
         UART_CH2_tx_in = (UART_CH2_tx_in + 1) % UART_CH2_buffer_size;
     }
+    if(!UART_CH2_CTS) 
+    {
+        //wait CTS to send RTS
+        waitCTStoRTS.attach_us(&UART_CH2_waitCTS_toRTS,15000);
+    }
+    if(UART_CH2_CTS && UART_CH2_RTS) UART_CH2_startSend();
+    if(UART_CH2_CTS && !UART_CH2_RTS) 
+    {
+        UART_CH2.putc(UART_CH2_RTSmessage);
+        UART_CH2_RTS = true;
+        UART_CH2_CTS = false;
+        waitCTStoDATA.attach_us(&UART_CH2_waitCTS_toData, 500000);
+    }
+    return;
+    
+}
+
+void UART_CH2_send()
+{
     if(!UART_CH2_CTS) 
     {
         //wait CTS to send RTS
@@ -98,14 +121,16 @@ void UART_CH2_send(char transmitword[], unsigned int limit)
         waitCTStoDATA.attach_us(&UART_CH2_waitCTS_toData, 1000);
     }
     return;
-    
 }
+
+
 
 void UART_CH2_startSend()
 {   
+    led = 0;
     bool empty;
     char temp_char;
-    empty = (UART_CH2_tx_in == UART_CH2_tx_out);
+    empty = (UART_CH2_tx_in != UART_CH2_tx_out);
     
     if (UART_CH2.writeable() && (empty)) 
     {
@@ -126,7 +151,7 @@ void UART_CH2_read(char transmitword[], unsigned int limit)
          UART_CH2.putc(UART_CH2_rx_StringCommand[i]);
     }
         UART_CH2_rx_CommandLength = limit+1;
-        led = !led;
+        
 }
 
 
@@ -150,25 +175,30 @@ void UART_CH2_Tx_interrupt() {
 void UART_CH2_Rx_interrupt() {
     while(UART_CH2.readable())
     {
+        
         UART_CH2_rx_buffer[UART_CH2_rx_in] = UART_CH2.getc();
         if( (UART_CH2_RTS) && (UART_CH2_rx_buffer[UART_CH2_rx_in] == UART_CH2_CTSmessage) )
         {
                 UART_CH2_CTS = true;
-                UART_CH2_rx_in = 0;
-                UART_CH2_startSend();
+                led = 0;
+                UART_CH2_waitCTS_toData();
                 return;
         }
-        if((UART_CH2_rx_buffer[UART_CH2_rx_in] == UART_CH2_RTSmessage))
+        if((UART_CH2_rx_buffer[UART_CH2_rx_in] == UART_CH2_RTSmessage) && UART_CH2_CTS)
         {
             if(UART_CH2_RTS) 
             {
                 UART_CH2_RTS = false;
-                backoff.attach_us(,((rand() % 901) +100));
+                 UART_CH2_rx_in = 0;
+                backoff.attach_us(&UART_CH2_send,((rand() % 901) +100));
+                return;
             }
             else if(!UART_CH2_RTS)
             {
                 UART_CH2.putc(UART_CH2_CTSmessage);
+                UART_CH2_rx_in = 0;
                 UART_CH2_CTS = false;
+                return;
             }
         }
 
