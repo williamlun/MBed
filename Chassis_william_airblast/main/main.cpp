@@ -68,15 +68,15 @@ int point_counter=0;
 
 struct point_info
 {
-   float required_x;
-   float required_y;
-   float required_w;
-   float required_tolerance_x;
-   float required_tolerance_y;
-   float required_tolerance_w;
-   float required_speed_max_x;
-   float required_speed_max_y;
-   float required_speed_max_w;
+   float required_x;            //meter
+   float required_y;            //meter
+   float required_w;            //degree
+   float required_tolerance_x;  //meter
+   float required_tolerance_y;  //meter
+   float required_tolerance_w;  //rad
+   float required_speed_max_x;  //m/s
+   float required_speed_max_y;  //m/s
+   float required_speed_max_w;  //rad/s
    float pid_on;
 };
 
@@ -135,8 +135,10 @@ float speed_max_w = points[0].required_speed_max_w;
 long odom_last_read= millis();
 
 /////////////////////////////////////
-const float RATE = 0.08;//0.18;
+const float RATE = 0.08;//0.18;     //motor update rate  (s)
 //////////////////////////
+
+///////////////////robot config
 
 ///////////////////////////
 float encoder_2_global_angle = 90;         //encoder coordinate system + 30 degree    =>  global coordinate system
